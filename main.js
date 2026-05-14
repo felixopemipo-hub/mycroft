@@ -2,19 +2,20 @@
 const SUPABASE_URL = 'https://akfddcmtpunucxsdcgpm.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_ZWOZhvbL3KYAtk8b8NiHPw_ah50vtnF';
 
-// Initialize Supabase client (only once)
-let supabase = null;
+// Initialize Supabase client (only once) - CORRECTED
+let supabaseClient = null;
 if (!window.__supabaseClient) {
-    window.__supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // Use the global supabase object from the CDN
+    window.__supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
-supabase = window.__supabaseClient;
+supabaseClient = window.__supabaseClient;
 
 // Current user state
 let currentUser = null;
 
 // Helper to check auth state on page load
 async function initAuth() {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await supabaseClient.auth.getUser();
     currentUser = user;
     updateNavigation();
     return user;
@@ -37,7 +38,7 @@ function updateNavigation() {
         if (logoutBtn) {
             logoutBtn.addEventListener('click', async (e) => {
                 e.preventDefault();
-                await supabase.auth.signOut();
+                await supabaseClient.auth.signOut();
                 window.location.href = 'index.html';
             });
         }
@@ -54,11 +55,11 @@ function updateNavigation() {
 // Track file view
 async function trackView(fileId) {
     if (!currentUser) return;
-    const { error } = await supabase.from('views').insert({
+    const { error } = await supabaseClient.from('views').insert({
         user_id: currentUser.id,
         file_id: fileId
     });
-    if (!error) await supabase.rpc('increment_file_views', { file_id: fileId });
+    if (!error) await supabaseClient.rpc('increment_file_views', { file_id: fileId });
 }
 
 // Track download
@@ -67,12 +68,12 @@ async function trackDownload(fileId) {
         alert('Please sign in to download files');
         return false;
     }
-    const { error } = await supabase.from('downloads').insert({
+    const { error } = await supabaseClient.from('downloads').insert({
         user_id: currentUser.id,
         file_id: fileId
     });
     if (!error) {
-        await supabase.rpc('increment_file_downloads', { file_id: fileId });
+        await supabaseClient.rpc('increment_file_downloads', { file_id: fileId });
         return true;
     }
     return false;
@@ -80,7 +81,7 @@ async function trackDownload(fileId) {
 
 // Get file URL from storage
 async function getFileUrl(filePath) {
-    const { data } = supabase.storage.from('uploads').getPublicUrl(filePath);
+    const { data } = supabaseClient.storage.from('uploads').getPublicUrl(filePath);
     return data.publicUrl;
 }
 
@@ -89,7 +90,7 @@ async function loadHorizontalContent(containerId, query, titleKey = 'title') {
     const container = document.getElementById(containerId);
     if (!container) return;
     
-    let supabaseQuery = supabase.from('files').select(`*, profiles:user_id (username)`);
+    let supabaseQuery = supabaseClient.from('files').select(`*, profiles:user_id (username)`);
     if (query && query.length === 2) {
         supabaseQuery = supabaseQuery.eq(query[0], query[1]);
     }
@@ -106,7 +107,7 @@ async function loadHorizontalContent(containerId, query, titleKey = 'title') {
                  alt="${file.file_name}">
             <div class="card-body">
                 <h3 class="card-title">${file.file_name}</h3>
-                <div class="card-meta">
+            <div class="card-meta">
                     <p><strong>Uploaded by:</strong> ${file.profiles?.username || 'Unknown'}</p>
                     <p><strong>Date:</strong> ${new Date(file.created_at).toLocaleDateString()}</p>
                 </div>
@@ -120,12 +121,12 @@ async function loadHorizontalContent(containerId, query, titleKey = 'title') {
     `).join('');
     
     // Attach download handlers and click-to-play
-    container.querySelectorAll('.download-btn').forEach(btn => {
+    container.q\\wuerySelectorAll('.download-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
             const fileId = btn.dataset.fileId;
             const fileName = btn.dataset.fileName;
-            const { data: file } = await supabase.from('files').select('storage_path').eq('id', fileId).single();
+            const { data: file } = await supabaseClient.from('files').select('storage_path').eq('id', fileId).single();
             if (file && await trackDownload(fileId)) {
                 const url = await getFileUrl(file.storage_path);
                 const link = document.createElement('a');
