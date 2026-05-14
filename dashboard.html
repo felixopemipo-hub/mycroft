@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard – MyWebBook</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="main.js"></script>
+</head>
+<body>
+    <header>
+        <span class="logo"><a href="homepage.html">MyWebBook</a></span>
+        <nav>
+            <a href="homepage.html">Home</a>
+            <a href="upload.html">Upload</a>
+            <a href="dashboard.html">Dashboard</a>
+            <a href="#" id="logout-nav">Sign Out</a>
+            <a href="about.html">About</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="profile-section" id="profile-section">
+            <img class="profile-avatar" id="profile-avatar" src="https://placehold.co/150/2b2b2b/00FF10?text=User" alt="Profile picture">
+            <div class="profile-info">
+                <h2 id="profile-name">Loading...</h2>
+                <div class="profile-rating">
+                    <span>Member since: <strong id="member-since">-</strong></span>
+                </div>
+            </div>
+        </section>
+
+        <h2 class="section-title">My Uploads</h2>
+        <div class="horizontal-scroll" id="my-uploads"></div>
+
+        <h2 class="section-title">Downloaded Content</h2>
+        <div class="horizontal-scroll" id="downloaded-content"></div>
+
+        <h2 class="section-title">Recently Viewed</h2>
+        <div class="horizontal-scroll" id="viewed-content"></div>
+
+        <section class="metrics-section">
+            <h2 class="metrics-title">My Metrics</h2>
+            <table class="metrics-table" id="metrics-table">
+                <tbody>
+                    <tr class="category-header"><td colspan="2"><strong>Total Viewed</strong></td></tr>
+                    <tr><td>Video</td><td class="number" id="viewed-video">0</td></tr>
+                    <tr><td>Ebook</td><td class="number" id="viewed-ebook">0</td></tr>
+                    <tr class="category-header"><td colspan="2"><strong>Total Uploads</strong></td></tr>
+                    <tr><td>Video</td><td class="number" id="uploads-video">0</td></tr>
+                    <tr><td>Ebook</td><td class="number" id="uploads-ebook">0</td></tr>
+                    <tr class="category-header"><td colspan="2"><strong>Total Downloads</strong></td></tr>
+                    <tr><td>Video</td><td class="number" id="downloads-video">0</td></tr>
+                    <tr><td>Ebook</td><td class="number" id="downloads-ebook">0</td></tr>
+                    <tr class="category-header"><td colspan="2"><strong>Total Reviewed</strong></td></tr>
+                    <tr><td>Video</td><td class="number" id="reviews-video">0</td></tr>
+                    <tr><td>Ebook</td><td class="number" id="reviews-ebook">0</td></tr>
+                </tbody>
+            </table>
+        </section>
+    </main>
+
+    <footer>
+        <div class="footer-grid">
+            <div class="footer-col">
+                <h3>MyWebBook</h3>
+                <a href="homepage.html">Home</a>
+                <a href="signup.html">Sign Up</a>
+                <a href="signin.html">Sign In</a>
+                <a href="about.html">About</a>
+            </div>
+            <div class="footer-col">
+                <h3>Content</h3>
+                <a href="listpage.html?category=Science">Science</a>
+                <a href="listpage.html?category=Art">Art</a>
+                <a href="listpage.html?category=Politics">Politics</a>
+                <a href="listpage.html?category=Physics">Physics</a>
+            </div>
+            <div class="footer-col">
+                <h3>Social</h3>
+                <a href="#">Twitter</a>
+                <a href="#">Facebook</a>
+                <a href="#">Instagram</a>
+            </div>
+        </div>
+        <hr>
+        <div class="footer-bottom">
+            <p>All contents © Copyright 1996-2026. MyWebBook is a registered trademark. Reproduction prohibited without written permission.</p>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            await initAuth();
+            
+            if (!currentUser) {
+                window.location.href = 'signin.html';
+                return;
+            }
+            
+            // Load profile
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', currentUser.id)
+                .single();
+            
+            if (profile) {
+                document.getElementById('profile-name').textContent = profile.username || currentUser.email;
+                document.getElementById('member-since').textContent = new Date(profile.created_at).toLocaleDateString();
+            }
+            
+            // Load my uploads
+            await loadHorizontalContent('my-uploads', ['user_id', currentUser.id]);
+            
+            // Load downloaded content
+            const { data: downloads } = await supabase
+                .from('downloads')
+                .select('files:*')
+                .eq('user_id', currentUser.id);
+            
+            const downloadsContainer = document.getElementById('downloaded-content');
+            if (downloads && downloads.length > 0) {
+                downloadsContainer.innerHTML = downloads.map(d => `
+                    <article class="card" data-file-id="${d.files.id}">
+                        <img src="${d.files.thumbnail_url || 'https://placehold.co/560x320/2b2b2b/ffffff?text=' + encodeURIComponent(d.files.file_name)}" 
+                             alt="${d.files.file_name}">
+                        <div class="card-body">
+                            <h3 class="card-title">${d.files.file_name}</h3>
+                            <div class="card-meta">
+                                <p><strong>Uploaded by:</strong> ${d.files.user_id}</p>
+                            </div>
+                            <button class="download-btn" data-file-id="${d.files.id}" data-file-name="${d.files.file_name}">Download</button>
+                        </div>
+                    </article>
+                `).join('');
+                
+                attachDownloadHandlers(downloadsContainer);
+                attachCardClickHandlers(downloadsContainer);
+            }
+            
+            // Load viewed content
+            const { data: views } = await supabase
+                .from('views')
+                .select('files:*')
+                .eq('user_id', currentUser.id)
+                .order('created_at', { ascending: false })
+                .limit(10);
+            
+            const viewsContainer = document.getElementById('viewed-content');
+            if (views && views.length > 0) {
+                viewsContainer.innerHTML = views.map(v => `
+                    <article class="card" data-file-id="${v.files.id}">
+                        <img src="${v.files.thumbnail_url || 'https://placehold.co/560x320/2b2b2b/ffffff?text=' + encodeURIComponent(v.files.file_name)}" 
+                             alt="${v.files.file_name}">
+                        <div class="card-body">
+                            <h3 class="card-title">${v.files.file_name}</h3>
+                            <div class="card-meta">
+                                <p><strong>Uploaded by:</strong> ${v.files.user_id}</p>
+                            </div>
+                            <button class="download-btn" data-file-id="${v.files.id}" data-file-name="${v.files.file_name}">Download</button>
+                        </div>
+                    </article>
+                `).join('');
+                
+                attachDownloadHandlers(viewsContainer);
+                attachCardClickHandlers(viewsContainer);
+            }
+            
+            // Load metrics
+            await loadMetrics();
+        });
+        
+        async function loadMetrics() {
+            // Count views by file type
+            const { data: views } = await supabase
+                .from('views')
+                .select('files:file_id (file_type)')
+                .eq('user_id', currentUser.id);
+            
+            let viewedVideo = 0, viewedEbook = 0;
+            views?.forEach(v => {
+                if (v.files?.file_type === 'video') viewedVideo++;
+                else if (v.files?.file_type === 'ebook' || v.files?.file_type === 'pdf') viewedEbook++;
+            });
+            document.getElementById('viewed-video').textContent = viewedVideo;
+            document.getElementById('viewed-ebook').textContent = viewedEbook;
+            
+            // Count uploads by type
+            const { data: uploads } = await supabase
+                .from('files')
+                .select('file_type')
+                .eq('user_id', currentUser.id);
+            
+            let uploadsVideo = 0, uploadsEbook = 0;
+            uploads?.forEach(f => {
+                if (f.file_type === 'video') uploadsVideo++;
+                else uploadsEbook++;
+            });
+            document.getElementById('uploads-video').textContent = uploadsVideo;
+            document.getElementById('uploads-ebook').textContent = uploadsEbook;
+            
+            // Count downloads by type
+            const { data: downloads } = await supabase
+                .from('downloads')
+                .select('files:file_id (file_type)')
+                .eq('user_id', currentUser.id);
+            
+            let downloadsVideo = 0, downloadsEbook = 0;
+            downloads?.forEach(d => {
+                if (d.files?.file_type === 'video') downloadsVideo++;
+                else if (d.files?.file_type === 'ebook' || d.files?.file_type === 'pdf') downloadsEbook++;
+            });
+            document.getElementById('downloads-video').textContent = downloadsVideo;
+            document.getElementById('downloads-ebook').textContent = downloadsEbook;
+            
+            // Count reviews
+            const { data: reviews } = await supabase
+                .from('reviews')
+                .select('files:file_id (file_type)')
+                .eq('user_id', currentUser.id);
+            
+            let reviewsVideo = 0, reviewsEbook = 0;
+            reviews?.forEach(r => {
+                if (r.files?.file_type === 'video') reviewsVideo++;
+                else if (r.files?.file_type === 'ebook' || r.files?.file_type === 'pdf') reviewsEbook++;
+            });
+            document.getElementById('reviews-video').textContent = reviewsVideo;
+            document.getElementById('reviews-ebook').textContent = reviewsEbook;
+        }
+        
+        function attachDownloadHandlers(container) {
+            container.querySelectorAll('.download-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const fileId = btn.dataset.fileId;
+                    const fileName = btn.dataset.fileName;
+                    
+                    const { data: file } = await supabase
+                        .from('files')
+                        .select('storage_path')
+                        .eq('id', fileId)
+                        .single();
+                    
+                    if (file && await trackDownload(fileId)) {
+                        const url = await getFileUrl(file.storage_path);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = fileName;
+                        link.click();
+                    }
+                });
+            });
+        }
+        
+        function attachCardClickHandlers(container) {
+            container.querySelectorAll('.card').forEach(card => {
+                card.addEventListener('click', (e) => {
+                    if (!e.target.classList.contains('download-btn')) {
+                        const fileId = card.dataset.fileId;
+                        window.location.href = `playpage.html?id=${fileId}`;
+                    }
+                });
+            });
+        }
+    </script>
+</body>
+</html>

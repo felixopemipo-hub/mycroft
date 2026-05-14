@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browse – MyWebBook</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="main.js"></script>
+</head>
+<body>
+    <header>
+        <span class="logo"><a href="homepage.html">MyWebBook</a></span>
+        <nav>
+            <a href="homepage.html">Home</a>
+            <a href="upload.html">Upload</a>
+            <a href="dashboard.html">Dashboard</a>
+            <a href="#" id="logout-nav">Sign Out</a>
+            <a href="about.html">About</a>
+        </nav>
+    </header>
+
+    <main>
+        <div class="container">
+            <h1 class="category-title" id="page-title">Browse Content</h1>
+
+            <div class="toolbar">
+                <div class="search-box">
+                    <input type="text" id="search-input" placeholder="Search files…" aria-label="Search">
+                    <button id="search-btn" class="search-btn" style="width: auto; padding: 0 1.2rem;">Search</button>
+                </div>
+                <select id="type-filter" class="filter-select" aria-label="Filter by type">
+                    <option value="">All Types</option>
+                    <option value="video">Video</option>
+                    <option value="pdf">PDF</option>
+                    <option value="ebook">Ebook</option>
+                </select>
+                <select id="sort-select" class="filter-select">
+                    <option value="newest">Newest First</option>
+                    <option value="rating">Top Rated</option>
+                    <option value="views">Most Viewed</option>
+                </select>
+            </div>
+
+            <div class="card-grid" id="content-grid">
+                <p>Loading content...</p>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <div class="footer-grid">
+            <div class="footer-col">
+                <h3>MyWebBook</h3>
+                <a href="homepage.html">Home</a>
+                <a href="signup.html">Sign Up</a>
+                <a href="signin.html">Sign In</a>
+                <a href="about.html">About</a>
+            </div>
+            <div class="footer-col">
+                <h3>Content</h3>
+                <a href="listpage.html?category=Science">Science</a>
+                <a href="listpage.html?category=Art">Art</a>
+                <a href="listpage.html?category=Politics">Politics</a>
+                <a href="listpage.html?category=Physics">Physics</a>
+            </div>
+            <div class="footer-col">
+                <h3>Social</h3>
+                <a href="#">Twitter</a>
+                <a href="#">Facebook</a>
+                <a href="#">Instagram</a>
+            </div>
+        </div>
+        <hr>
+        <div class="footer-bottom">
+            <p>All contents © Copyright 1996-2026. MyWebBook is a registered trademark. Reproduction prohibited without written permission.</p>
+        </div>
+    </footer>
+
+    <script>
+        let currentCategory = '';
+        let currentSearch = '';
+        let currentType = '';
+        let currentSort = 'newest';
+        
+        document.addEventListener('DOMContentLoaded', async () => {
+            await initAuth();
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            currentCategory = urlParams.get('category') || '';
+            currentSearch = urlParams.get('search') || '';
+            
+            if (currentCategory) {
+                document.getElementById('page-title').textContent = currentCategory.toUpperCase();
+            } else if (currentSearch) {
+                document.getElementById('page-title').textContent = `Search: ${currentSearch}`;
+                document.getElementById('search-input').value = currentSearch;
+            }
+            
+            document.getElementById('search-btn').addEventListener('click', () => {
+                currentSearch = document.getElementById('search-input').value;
+                currentCategory = '';
+                window.history.pushState({}, '', `?search=${encodeURIComponent(currentSearch)}`);
+                document.getElementById('page-title').textContent = `Search: ${currentSearch}`;
+                loadContent();
+            });
+            
+            document.getElementById('search-input').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') document.getElementById('search-btn').click();
+            });
+            
+            document.getElementById('type-filter').addEventListener('change', (e) => {
+                currentType = e.target.value;
+                loadContent();
+            });
+            
+            document.getElementById('sort-select').addEventListener('change', (e) => {
+                currentSort = e.target.value;
+                loadContent();
+            });
+            
+            await loadContent();
+        });
+        
+        async function loadContent() {
+            const grid = document.getElementById('content-grid');
+            grid.innerHTML = '<p>Loading...</p>';
+            
+            let query = supabase
+                .from('files')
+                .select('*, profiles:user_id (username)');
+            
+            // Apply filters
+            if (currentCategory) {
+                query = query.eq('tag', currentCategory);
+            }
+            
+            if (currentSearch) {
+                query = query.ilike('file_name', `%${currentSearch}%`);
+            }
+            
+            if (currentType) {
+                query = query.eq('file_type', currentType);
+            }
+            
+            // Apply sorting
+            if (currentSort === 'newest') {
+                query = query.order('created_at', { ascending: false });
+            } else if (currentSort === 'rating') {
+                query = query.order('avg_rating', { ascending: false, nullsFirst: false });
+            } else if (currentSort === 'views') {
+                query = query.order('views', { ascending: false });
+            }
+            
+            const { data: files, error } = await query;
+            
+            if (error || !files || files.length === 0) {
+                grid.innerHTML = '<p style="text-align: center;">No content found</p>';
+                return;
+            }
+            
+            grid.innerHTML = files.map(file => `
+                <article class="card" data-file-id="${file.id}">
+                    <img src="${file.thumbnail_url || 'https://placehold.co/600x400/2b2b2b/ffffff?text=' + encodeURIComponent(file.file_name)}" 
+                         alt="${file.file_name}">
+                    <div class="card-body">
+                        <h2 class="card-title">${file.file_name}</h2>
+                        <div class="card-meta">
+                            <p><strong>Uploaded by:</strong> ${file.profiles?.username || 'Unknown'}</p>
+                            <p><strong>Date:</strong> ${new Date(file.created_at).toLocaleDateString()}</p>
+                            <p><strong>Views:</strong> ${file.views || 0} | <strong>Downloads:</strong> ${file.downloads || 0}</p>
+                        </div>
+                        <div class="card-tags">
+                            <span class="rating">⭐ ${file.avg_rating || 'New'}</span>
+                            <span class="tag-btn">${file.tag || 'General'}</span>
+                        </div>
+                        <button class="download-btn" data-file-id="${file.id}" data-file-name="${file.file_name}">Download</button>
+                    </div>
+                </article>
+            `).join('');
+            
+            // Attach download handlers
+            grid.querySelectorAll('.download-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const fileId = btn.dataset.fileId;
+                    const fileName = btn.dataset.fileName;
+                    
+                    const { data: file } = await supabase
+                        .from('files')
+                        .select('storage_path')
+                        .eq('id', fileId)
+                        .single();
+                    
+                    if (file && await trackDownload(fileId)) {
+                        const url = await getFileUrl(file.storage_path);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = fileName;
+                        link.click();
+                    } else if (!currentUser) {
+                        alert('Please sign in to download');
+                        window.location.href = 'signin.html';
+                    }
+                });
+            });
+            
+            // Card click to playpage
+            grid.querySelectorAll('.card').forEach(card => {
+                card.addEventListener('click', (e) => {
+                    if (!e.target.classList.contains('download-btn')) {
+                        const fileId = card.dataset.fileId;
+                        window.location.href = `playpage.html?id=${fileId}`;
+                    }
+                });
+            });
+        }
+    </script>
+</body>
+</html>

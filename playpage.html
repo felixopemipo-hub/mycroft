@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Player – MyWebBook</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="main.js"></script>
+    <style>
+        .pdf-viewer {
+            width: 100%;
+            height: 70vh;
+            border: none;
+            border-radius: 12px;
+        }
+        .rating-stars {
+            display: inline-flex;
+            gap: 0.3rem;
+            cursor: pointer;
+        }
+        .star {
+            font-size: 1.5rem;
+            color: #555;
+            transition: color 0.2s;
+        }
+        .star:hover, .star.active {
+            color: #FFD700;
+        }
+        .review-section {
+            margin-top: 2rem;
+            background-color: #090814;
+            border-radius: 12px;
+            padding: 1.5rem;
+        }
+        .review-item {
+            border-bottom: 1px solid #333;
+            padding: 1rem 0;
+        }
+        .review-rating {
+            color: #FFD700;
+            margin-bottom: 0.3rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <span class="logo"><a href="homepage.html">MyWebBook</a></span>
+        <nav>
+            <a href="homepage.html">Home</a>
+            <a href="upload.html">Upload</a>
+            <a href="dashboard.html">Dashboard</a>
+            <a href="#" id="logout-nav">Sign Out</a>
+            <a href="about.html">About</a>
+        </nav>
+    </header>
+
+    <main>
+        <div id="content-container">
+            <div class="video-container" id="player-container"></div>
+            
+            <section class="details-card" id="details-card">
+                <div class="details-info">
+                    <h2 id="video-title">Loading...</h2>
+                    <div class="meta-line">
+                        <span>Uploaded by: <strong id="uploader-name">-</strong></span>
+                    </div>
+                    <div class="meta-line">
+                        <span>Rating: <strong id="avg-rating">⭐ 0</strong></span>
+                        <span>|</span>
+                        <span>Views: <strong id="view-count">0</strong></span>
+                        <span>|</span>
+                        <span>Downloads: <strong id="download-count">0</strong></span>
+                    </div>
+                    <div class="meta-line">
+                        <span id="description-text"></span>
+                    </div>
+                    <div class="meta-line">
+                        <a href="#" id="share-link" class="share-link">🔗 share link</a>
+                    </div>
+                    <div class="meta-line" id="rating-section">
+                        <span>Rate this: </span>
+                        <div class="rating-stars" id="rating-stars">
+                            <span class="star" data-rating="1">★</span>
+                            <span class="star" data-rating="2">★</span>
+                            <span class="star" data-rating="3">★</span>
+                            <span class="star" data-rating="4">★</span>
+                            <span class="star" data-rating="5">★</span>
+                        </div>
+                    </div>
+                </div>
+                <button class="download-btn" id="download-page-btn">⬇ Download</button>
+            </section>
+            
+            <div class="review-section">
+                <h3>Reviews & Comments</h3>
+                <div id="reviews-list"></div>
+                <div id="add-review" style="margin-top: 1rem;">
+                    <textarea id="review-text" placeholder="Write a review..." rows="3" style="width: 100%; margin-bottom: 0.5rem;"></textarea>
+                    <button id="submit-review" class="download-btn" style="width: auto; padding: 0.5rem 1.5rem;">Submit Review</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <div class="footer-grid">
+            <div class="footer-col">
+                <h3>MyWebBook</h3>
+                <a href="homepage.html">Home</a>
+                <a href="signup.html">Sign Up</a>
+                <a href="signin.html">Sign In</a>
+                <a href="about.html">About</a>
+            </div>
+            <div class="footer-col">
+                <h3>Content</h3>
+                <a href="listpage.html?category=Science">Science</a>
+                <a href="listpage.html?category=Art">Art</a>
+                <a href="listpage.html?category=Politics">Politics</a>
+                <a href="listpage.html?category=Physics">Physics</a>
+            </div>
+            <div class="footer-col">
+                <h3>Social</h3>
+                <a href="#">Twitter</a>
+                <a href="#">Facebook</a>
+                <a href="#">Instagram</a>
+            </div>
+        </div>
+        <hr>
+        <div class="footer-bottom">
+            <p>All contents © Copyright 1996-2026. MyWebBook is a registered trademark. Reproduction prohibited without written permission.</p>
+        </div>
+    </footer>
+
+    <script>
+        let currentFile = null;
+        
+        document.addEventListener('DOMContentLoaded', async () => {
+            await initAuth();
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            const fileId = urlParams.get('id');
+            
+            if (!fileId) {
+                document.getElementById('player-container').innerHTML = '<p style="text-align: center;">No file specified</p>';
+                return;
+            }
+            
+            // Load file details
+            const { data: file, error } = await supabase
+                .from('files')
+                .select('*, profiles:user_id (username)')
+                .eq('id', fileId)
+                .single();
+            
+            if (error || !file) {
+                document.getElementById('player-container').innerHTML = '<p style="text-align: center;">File not found</p>';
+                return;
+            }
+            
+            currentFile = file;
+            
+            // Track view
+            if (currentUser) {
+                await trackView(fileId);
+            }
+            
+            // Update UI
+            document.getElementById('video-title').textContent = file.file_name;
+            document.getElementById('uploader-name').textContent = file.profiles?.username || 'Unknown User';
+            document.getElementById('avg-rating').innerHTML = `⭐ ${file.avg_rating || '0'} (${file.review_count || 0} reviews)`;
+            document.getElementById('view-count').textContent = file.views || 0;
+            document.getElementById('download-count').textContent = file.downloads || 0;
+            document.getElementById('description-text').innerHTML = file.description || 'No description provided';
+            
+            // Set share link
+            document.getElementById('share-link').href = window.location.href;
+            document.getElementById('share-link').addEventListener('click', (e) => {
+                e.preventDefault();
+                navigator.clipboard.writeText(window.location.href);
+                alert('Link copied to clipboard!');
+            });
+            
+            // Render player based on file type
+            const playerContainer = document.getElementById('player-container');
+            const fileUrl = await getFileUrl(file.storage_path);
+            
+            if (file.file_type === 'video') {
+                playerContainer.innerHTML = `
+                    <video class="video-player" controls autoplay>
+                        <source src="${fileUrl}" type="video/mp4">
+                        Your browser does not support the video tag.
+                    </video>
+                `;
+            } else if (file.file_type === 'pdf') {
+                playerContainer.innerHTML = `
+                    <iframe class="pdf-viewer" src="https://docs.google.com/gview?url=${encodeURIComponent(fileUrl)}&embedded=true"></iframe>
+                    <p style="text-align: center; margin-top: 0.5rem;">
+                        <a href="${fileUrl}" target="_blank">Open PDF in new tab</a>
+                    </p>
+                `;
+            } else {
+                playerContainer.innerHTML = `
+                    <div style="background-color: #090814; border-radius: 12px; padding: 2rem; text-align: center;">
+                        <h3>${file.file_name}</h3>
+                        <p>File type: ${file.file_type}</p>
+                        <a href="${fileUrl}" download="${file.file_name}" class="download-btn" style="display: inline-block; width: auto;">Download File</a>
+                    </div>
+                `;
+            }
+            
+            // Download button
+            document.getElementById('download-page-btn').addEventListener('click', async () => {
+                if (await trackDownload(fileId)) {
+                    const link = document.createElement('a');
+                    link.href = fileUrl;
+                    link.download = file.file_name;
+                    link.click();
+                } else if (!currentUser) {
+                    alert('Please sign in to download');
+                    window.location.href = 'signin.html';
+                }
+            });
+            
+            // Load reviews
+            await loadReviews(fileId);
+            
+            // Rating stars
+            if (currentUser) {
+                const { data: existingReview } = await supabase
+                    .from('reviews')
+                    .select('rating')
+                    .eq('file_id', fileId)
+                    .eq('user_id', currentUser.id)
+                    .single();
+                
+                if (existingReview) {
+                    highlightStars(existingReview.rating);
+                }
+                
+                document.querySelectorAll('.star').forEach(star => {
+                    star.addEventListener('click', async (e) => {
+                        const rating = parseInt(star.dataset.rating);
+                        await submitRating(fileId, rating);
+                        highlightStars(rating);
+                    });
+                });
+            } else {
+                document.getElementById('rating-section').style.display = 'none';
+            }
+            
+            // Submit review
+            document.getElementById('submit-review').addEventListener('click', async () => {
+                if (!currentUser) {
+                    alert('Please sign in to leave a review');
+                    window.location.href = 'signin.html';
+                    return;
+                }
+                
+                const reviewText = document.getElementById('review-text').value;
+                if (!reviewText.trim()) {
+                    alert('Please enter a review');
+                    return;
+                }
+                
+                const { error } = await supabase.from('reviews').insert({
+                    file_id: fileId,
+                    user_id: currentUser.id,
+                    rating: 0,
+                    comment: reviewText
+                });
+                
+                if (error) {
+                    alert('Error submitting review: ' + error.message);
+                } else {
+                    document.getElementById('review-text').value = '';
+                    await loadReviews(fileId);
+                }
+            });
+        });
+        
+        function highlightStars(rating) {
+            document.querySelectorAll('.star').forEach((star, index) => {
+                if (index < rating) {
+                    star.classList.add('active');
+                } else {
+                    star.classList.remove('active');
+                }
+            });
+        }
+        
+        async function submitRating(fileId, rating) {
+            // Check if user already rated
+            const { data: existing } = await supabase
+                .from('reviews')
+                .select('id')
+                .eq('file_id', fileId)
+                .eq('user_id', currentUser.id)
+                .single();
+            
+            if (existing) {
+                const { error } = await supabase
+                    .from('reviews')
+                    .update({ rating: rating })
+                    .eq('id', existing.id);
+                
+                if (error) alert('Error updating rating: ' + error.message);
+            } else {
+                const { error } = await supabase.from('reviews').insert({
+                    file_id: fileId,
+                    user_id: currentUser.id,
+                    rating: rating,
+                    comment: ''
+                });
+                
+                if (error) alert('Error submitting rating: ' + error.message);
+            }
+            
+            // Update average rating in files table
+            await updateAverageRating(fileId);
+        }
+        
+        async function updateAverageRating(fileId) {
+            const { data: reviews } = await supabase
+                .from('reviews')
+                .select('rating')
+                .eq('file_id', fileId)
+                .not('rating', 'eq', 0);
+            
+            if (reviews && reviews.length > 0) {
+                const avg = reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length;
+                await supabase
+                    .from('files')
+                    .update({ avg_rating: avg.toFixed(1), review_count: reviews.length })
+                    .eq('id', fileId);
+                
+                document.getElementById('avg-rating').innerHTML = `⭐ ${avg.toFixed(1)} (${reviews.length} reviews)`;
+            }
+        }
+        
+        async function loadReviews(fileId) {
+            const { data: reviews } = await supabase
+                .from('reviews')
+                .select('*, profiles:user_id (username)')
+                .eq('file_id', fileId)
+                .order('created_at', { ascending: false });
+            
+            const container = document.getElementById('reviews-list');
+            if (!reviews || reviews.length === 0) {
+                container.innerHTML = '<p>No reviews yet. Be the first to review!</p>';
+                return;
+            }
+            
+            container.innerHTML = reviews.map(review => `
+                <div class="review-item">
+                    <div class="review-rating">${'★'.repeat(review.rating || 0)}${'☆'.repeat(5 - (review.rating || 0))}</div>
+                    <strong>${review.profiles?.username || 'Anonymous'}</strong>
+                    <p>${review.comment || 'No comment'}</p>
+                    <small style="color: #888;">${new Date(review.created_at).toLocaleDateString()}</small>
+                </div>
+            `).join('');
+        }
+    </script>
+</body>
+</html>

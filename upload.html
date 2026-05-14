@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload – MyWebBook</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="main.js"></script>
+    <style>
+        .file-upload-wrapper {
+            width: 100%;
+            height: 40px;
+            border-radius: 5px;
+            border: 2px solid #ffffff;
+            background-color: #2b2b2b;
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        .file-upload-wrapper input[type="file"] {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+        .file-upload-label {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            height: 100%;
+            padding: 0 0.8rem;
+            background-color: #2b2b2b;
+            border-radius: 5px;
+            color: #cccccc;
+            cursor: pointer;
+        }
+        .file-name {
+            color: #ffffff;
+            max-width: 70%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        select, input[type="text"] {
+            width: 100%;
+            height: 40px;
+            border-radius: 5px;
+            border: 2px solid #ffffff;
+            background-color: #2b2b2b;
+            color: #ffffff;
+            padding: 0 0.8rem;
+            font-size: 0.95rem;
+            outline: none;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background-color: #333;
+            border-radius: 2px;
+            margin-top: 1rem;
+            display: none;
+        }
+        .progress-fill {
+            width: 0%;
+            height: 100%;
+            background-color: #00FF10;
+            border-radius: 2px;
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <span class="logo"><a href="homepage.html">MyWebBook</a></span>
+        <nav>
+            <a href="homepage.html">Home</a>
+            <a href="signup.html">Sign Up</a>
+            <a href="signin.html">Sign In</a>
+            <a href="about.html">About</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="upload-card" aria-labelledby="upload-heading">
+            <h2 id="upload-heading">Upload Content</h2>
+            <form id="upload-form">
+                <div class="form-group">
+                    <label for="file-upload">File (Video, PDF, or Ebook)</label>
+                    <div class="file-upload-wrapper">
+                        <input type="file" id="file-upload" name="userfile" accept="video/*,application/pdf,application/epub+zip,application/mobi">
+                        <span class="file-upload-label">
+                            <span>Choose a file…</span>
+                            <span class="file-name" id="file-name-display"></span>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="file-tag">Category</label>
+                    <select id="file-tag" name="file_tag" required>
+                        <option value="Science">Science</option>
+                        <option value="Art">Art</option>
+                        <option value="Politics">Politics</option>
+                        <option value="Physics">Physics</option>
+                        <option value="Mathematics">Mathematics</option>
+                        <option value="Programming">Programming</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="file-type">File Type</label>
+                    <select id="file-type" name="file_type" required>
+                        <option value="video">Video</option>
+                        <option value="pdf">PDF</option>
+                        <option value="ebook">Ebook</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="file-name">Display Name</label>
+                    <input type="text" id="file-name" name="file_name" placeholder="Enter file name" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="file-description">Description</label>
+                    <textarea id="file-description" name="file_description" rows="4" placeholder="Describe the file…"></textarea>
+                </div>
+
+                <div class="progress-bar" id="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+
+                <button type="submit" class="btn-upload" style="background-color: #00FF10; color: #000; border: none; border-radius: 5px; height: 45px; width: 100%; max-width: 200px; font-weight: 700; display: block; margin: 1.5rem auto 0;">UPLOAD</button>
+            </form>
+            <div id="upload-message" style="text-align: center; margin-top: 1rem;"></div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="footer-grid">
+            <div class="footer-col">
+                <h3>MyWebBook</h3>
+                <a href="homepage.html">Home</a>
+                <a href="signup.html">Sign Up</a>
+                <a href="signin.html">Sign In</a>
+                <a href="about.html">About</a>
+            </div>
+            <div class="footer-col">
+                <h3>Content</h3>
+                <a href="listpage.html?category=Science">Science</a>
+                <a href="listpage.html?category=Art">Art</a>
+                <a href="listpage.html?category=Politics">Politics</a>
+                <a href="listpage.html?category=Physics">Physics</a>
+            </div>
+            <div class="footer-col">
+                <h3>Social</h3>
+                <a href="#">Twitter</a>
+                <a href="#">Facebook</a>
+                <a href="#">Instagram</a>
+            </div>
+        </div>
+        <hr>
+        <div class="footer-bottom">
+            <p>All contents © Copyright 1996-2026. MyWebBook is a registered trademark. Reproduction prohibited without written permission.</p>
+        </div>
+    </footer>
+
+    <script>
+        const fileInput = document.getElementById('file-upload');
+        const fileNameDisplay = document.getElementById('file-name-display');
+        
+        fileInput.addEventListener('change', function() {
+            if (fileInput.files.length > 0) {
+                fileNameDisplay.textContent = fileInput.files[0].name;
+            } else {
+                fileNameDisplay.textContent = '';
+            }
+        });
+        
+        document.getElementById('upload-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (!currentUser) {
+                alert('Please sign in to upload files');
+                window.location.href = 'signin.html';
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('Please select a file');
+                return;
+            }
+            
+            const fileTag = document.getElementById('file-tag').value;
+            const fileType = document.getElementById('file-type').value;
+            const fileName = document.getElementById('file-name').value;
+            const description = document.getElementById('file-description').value;
+            
+            // Check file size (max 100MB)
+            if (file.size > 100 * 1024 * 1024) {
+                alert('File size must be less than 100MB');
+                return;
+            }
+            
+            const progressBar = document.getElementById('progress-bar');
+            const progressFill = document.getElementById('progress-fill');
+            progressBar.style.display = 'block';
+            
+            const fileExt = file.name.split('.').pop();
+            const storagePath = `${currentUser.id}/${Date.now()}_${fileName.replace(/[^a-zA-Z0-9]/g, '_')}.${fileExt}`;
+            
+            try {
+                // Upload to Supabase Storage
+                const { data: uploadData, error: uploadError } = await supabase.storage
+                    .from('uploads')
+                    .upload(storagePath, file, {
+                        cacheControl: '3600',
+                        upsert: false
+                    });
+                
+                if (uploadError) throw uploadError;
+                
+                // Get public URL
+                const { data: urlData } = supabase.storage.from('uploads').getPublicUrl(storagePath);
+                
+                // Insert metadata into files table
+                const { data: fileData, error: dbError } = await supabase
+                    .from('files')
+                    .insert({
+                        user_id: currentUser.id,
+                        file_name: fileName,
+                        original_name: file.name,
+                        tag: fileTag,
+                        file_type: fileType,
+                        description: description,
+                        storage_path: storagePath,
+                        url: urlData.publicUrl,
+                        size: file.size,
+                        created_at: new Date().toISOString()
+                    })
+                    .select();
+                
+                if (dbError) throw dbError;
+                
+                progressFill.style.width = '100%';
+                document.getElementById('upload-message').innerHTML = '<span style="color: #00FF10;">✓ Upload successful! Redirecting...</span>';
+                
+                setTimeout(() => {
+                    window.location.href = 'dashboard.html';
+                }, 1500);
+                
+            } catch (error) {
+                console.error('Upload error:', error);
+                document.getElementById('upload-message').innerHTML = '<span style="color: #ff4444;">✗ Upload failed: ' + error.message + '</span>';
+                progressBar.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>
